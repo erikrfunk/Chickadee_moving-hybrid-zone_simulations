@@ -1,0 +1,469 @@
+//Species-specific selection on two variants of the same locus
+//Spatial model
+
+initialize() {
+//Set up as a 2D continuous space model 
+initializeSLiMOptions(dimensionality="xy");
+//No mutation rate to keep new mutations from disturbing the pattern
+initializeMutationRate(0);
+//Introduce the different types of mutations to be filled from file
+initializeMutationType("m1", 0.5, "f", 0.0); //neutral
+initializeMutationType("m2", 0.5, "f", 0.0); //neutral
+initializeMutationType("m3", 0.5, "f", 0.0); //neutral
+initializeMutationType("m4", 0.5, "f", 0.0); //neutral
+initializeMutationType("m5", 0.5, "f", 0.0); //neutral
+initializeMutationType("m6", 0.5, "f", 0.0); //neutral
+//Make a genomic element, split it up in different chromosomes
+initializeGenomicElementType("g1", c(m3, m4, m5, m6), c(49, 49, 49, 49));
+initializeGenomicElementType("g2", c(m3, m4, m5, m6), c(49, 49, 49, 49));
+initializeGenomicElementType("g3", c(m1, m2, m3, m4, m5, m6), c(1, 1, 49, 49, 49, 49));
+initializeGenomicElementType("g4", c(m3, m4, m5, m6), c(49, 49, 49, 49));
+
+initializeGenomicElement(g1, 0, 49);
+initializeGenomicElement(g2, 50, 99);
+initializeGenomicElement(g3, 100, 149);
+initializeGenomicElement(g4, 150, 199);
+
+//Give different recombination rates between elements
+rates = c(1.5e-7, 0.5, 1.5e-7, 0.5, 1.5e-7, 0.5, 1.5e-7);
+ends = c(49, 50, 99, 100, 149, 150, 199);
+initializeRecombinationRate(rates, ends);
+//autosome
+//initializeSex("A");
+
+//defineConstant("burnin",199); // Number of generations to stabilize
+defineConstant("selection", asFloat(format("%1.2f",runif(1,0.01,0.45))));
+defineConstant("rate", asInteger(runif(1,50,250))); // Rate of movement of the contact zone calculated as: contact - (sim.cycle - burnin)/rate
+defineConstant("dispersal", 0.2);
+defineConstant("iteration", 3); // Define the iteration number to include in the vcf output
+defineConstant("output", "~/other_projs/chickadee_hybridzone_movement/TEST"); // base file name to use (could include path or not), 
+defineConstant("VCF", output+"_s"+asString(selection)+"_r"+asString(rate)+"_"+asString(iteration)+".vcf");
+
+// Spatial mate choice
+initializeInteractionType(1, "xy", reciprocal=T, maxDistance=1);
+i1.setInteractionFunction("n", 1.0, 0.5);
+
+// Spatial competition
+//  initializeInteractionType(2, "xy", reciprocal = T, 
+//  maxDistance = 10);
+//  i2.setInteractionFunction("n", 3.0, 0.5);
+
+} 
+
+
+//Start reading in the data
+1 late() {
+    // Generate source population for the first species
+	sim.addSubpop("p1", 1000);
+	p1.setSpatialBounds(c(-25.0, -5.0, 25.0, 5.0)); // Increase boundaries to make the numbers easier to work with
+	
+	// drop the individuals in xy space
+	p1.individuals.setSpatialPosition(p1.pointUniform(1000));
+	
+	sp2_idx = order(p1.individuals.x)[0:499];
+	sp1_idx = order(p1.individuals.x)[500:999];
+	sp1 = p1.individuals[sp1_idx];
+	sp2 = p1.individuals[sp2_idx];		
+
+	
+	// READ MS FORMAT INITIAL STATE P1 m1
+	lines = readFile("~/other_projs/chickadee_hybridzone_movement/P1_m1_table_1.txt");
+	index = 0;
+	
+   	// skip lines until reaching the // line, then skip that line
+	while (lines[index] != "//")
+		index = index + 1;
+	index = index + 1;
+	
+	if (index + 2 + p1.individualCount > size(lines)) 
+		stop("File is too short; terminating.");
+	
+	// next line should be segsites:
+	segsitesLine = lines[index];
+	index = index + 1;
+	parts = strsplit(segsitesLine);
+	if (size(parts) != 2) stop("Malformed segsites.");
+	if (parts[0] != "segsites:") stop("Missing segsites.");
+	segsites = asInteger(parts[1]);
+	
+	// and next is positions:
+	positionsLine = lines[index];
+	index = index + 1;
+	parts = strsplit(positionsLine);
+	if (size(parts) != segsites + 1) stop("Malformed positions.");
+	if (parts[0] != "positions:") stop("Missing positions.");
+	positions = asFloat(parts[1:(size(parts)-1)]);
+	
+	// create all mutations in subpop
+	sim.addSubpop("p100", 2);
+	g = p100.genomes[0];
+	L = sim.chromosome.lastPosition;
+	intPositions = asInteger(round(positions * L));
+	muts = g.addNewMutation(m1, 0.0, intPositions);
+	
+	//Add it to the appropriate genomes
+	f = asLogical(asInteger(strsplit(lines[index], "")));
+	for (g in sp1.genomes){
+		g.addMutations(muts[f]);
+   }
+
+	// remove the dummy subpopulation
+	p100.setSubpopulationSize(0);
+    
+    // READ MS FORMAT INITIAL STATE P1 m3
+	lines = readFile("~/other_projs/chickadee_hybridzone_movement/P1_m3_table_50.txt");
+	index = 0;
+	
+   	// skip lines until reaching the // line, then skip that line
+	while (lines[index] != "//")
+		index = index + 1;
+	index = index + 1;
+	
+	if (index + 2 + p1.individualCount > size(lines))
+		stop("File is too short; terminating.");
+	
+	// next line should be segsites:
+	segsitesLine = lines[index];
+	index = index + 1;
+	parts = strsplit(segsitesLine);
+	if (size(parts) != 2) stop("Malformed segsites.");
+	if (parts[0] != "segsites:") stop("Missing segsites.");
+	segsites = asInteger(parts[1]);
+	
+	// and next is positions:
+	positionsLine = lines[index];
+	index = index + 1;
+	parts = strsplit(positionsLine);
+	if (size(parts) != segsites + 1) stop("Malformed positions.");
+	if (parts[0] != "positions:") stop("Missing positions.");
+	positions = asFloat(parts[1:(size(parts)-1)]);
+	
+	// create all mutations in a genome 
+	sim.addSubpop("p101", 2);
+	g = p101.genomes[0];
+	L = sim.chromosome.lastPosition;
+	intPositions = asInteger(round(positions * L));
+	muts = g.addNewMutation(m3, 0.0, intPositions);
+	
+	//Add it to the appropriate genomes
+	f = asLogical(asInteger(strsplit(lines[index], "")));
+	for (g in sp1.genomes){
+		g.addMutations(muts[f]);
+   }
+	// remove the dummy subpopulation
+	p101.setSubpopulationSize(0);
+ 
+// READ MS FORMAT INITIAL STATE P1 m3
+	lines = readFile("~/other_projs/chickadee_hybridzone_movement/P1_m5_table_49_nonoverlapping.txt");
+	index = 0;
+	
+   	// skip lines until reaching the // line, then skip that line
+	while (lines[index] != "//")
+		index = index + 1;
+	index = index + 1;
+	
+	if (index + 2 + p1.individualCount > size(lines))
+		stop("File is too short; terminating.");
+	
+	// next line should be segsites:
+	segsitesLine = lines[index];
+	index = index + 1;
+	parts = strsplit(segsitesLine);
+	if (size(parts) != 2) stop("Malformed segsites.");
+	if (parts[0] != "segsites:") stop("Missing segsites.");
+	segsites = asInteger(parts[1]);
+	
+	// and next is positions:
+	positionsLine = lines[index];
+	index = index + 1;
+	parts = strsplit(positionsLine);
+	if (size(parts) != segsites + 1) stop("Malformed positions.");
+	if (parts[0] != "positions:") stop("Missing positions.");
+	positions = asFloat(parts[1:(size(parts)-1)]);
+	
+	// create all mutations in a genome 
+	sim.addSubpop("p105", 2);
+	g = p105.genomes[0];
+	L = sim.chromosome.lastPosition;
+	intPositions = asInteger(round(positions * L));
+	muts = g.addNewMutation(m5, 0.0, intPositions);
+	
+	//Add it to the appropriate genomes
+	f = asLogical(asInteger(strsplit(lines[index], "")));
+	for (g in sp1.genomes){
+		g.addMutations(muts[f]);
+   }
+	
+	// remove the dummy subpopulation
+	p105.setSubpopulationSize(0);
+
+	// READ MS FORMAT INITIAL STATE P30 m2
+	lines = readFile("~/other_projs/chickadee_hybridzone_movement/P30_m2_table_1.txt");
+	index = 0;
+	
+   	// skip lines until reaching the // line, then skip that line
+	while (lines[index] != "//")
+		index = index + 1;
+	index = index + 1;
+	
+	if (index + 2 + p1.individualCount > size(lines))
+		stop("File is too short; terminating.");
+	
+	// next line should be segsites:
+	segsitesLine = lines[index];
+	index = index + 1;
+	parts = strsplit(segsitesLine);
+	if (size(parts) != 2) stop("Malformed segsites.");
+	if (parts[0] != "segsites:") stop("Missing segsites.");
+	segsites = asInteger(parts[1]);
+	
+	// and next is positions:
+	positionsLine = lines[index];
+	index = index + 1;
+	parts = strsplit(positionsLine);
+	if (size(parts) != segsites + 1) stop("Malformed positions.");
+	if (parts[0] != "positions:") stop("Missing positions.");
+	positions = asFloat(parts[1:(size(parts)-1)]);
+	
+	// create all mutations in a genome 
+	sim.addSubpop("p102", 2);
+	g = p102.genomes[0];
+	L = sim.chromosome.lastPosition;
+	intPositions = asInteger(round(positions * L));
+	muts = g.addNewMutation(m2, 0.0, intPositions);
+	
+	//Add it to the appropriate genomes
+	f = asLogical(asInteger(strsplit(lines[index], "")));
+	for (g in sp2.genomes){
+		g.addMutations(muts[f]);
+   }
+   
+   //Remove dummy pop
+	p102.setSubpopulationSize(0);
+    
+    // READ MS FORMAT INITIAL STATE P30 m2
+	lines = readFile("~/other_projs/chickadee_hybridzone_movement/P30_m4_table_50.txt");
+	index = 0;
+	
+   	// skip lines until reaching the // line, then skip that line
+	while (lines[index] != "//")
+		index = index + 1;
+	index = index + 1;
+	
+	if (index + 2 + p1.individualCount > size(lines))
+		stop("File is too short; terminating.");
+	
+	// next line should be segsites:
+	segsitesLine = lines[index];
+	index = index + 1;
+	parts = strsplit(segsitesLine);
+	if (size(parts) != 2) stop("Malformed segsites.");
+	if (parts[0] != "segsites:") stop("Missing segsites.");
+	segsites = asInteger(parts[1]);
+	
+	// and next is positions:
+	positionsLine = lines[index];
+	index = index + 1;
+	parts = strsplit(positionsLine);
+	if (size(parts) != segsites + 1) stop("Malformed positions.");
+	if (parts[0] != "positions:") stop("Missing positions.");
+	positions = asFloat(parts[1:(size(parts)-1)]);
+	
+	// create all mutations in a genome
+	sim.addSubpop("p103", 2);
+	g = p103.genomes[0];
+	L = sim.chromosome.lastPosition;
+	intPositions = asInteger(round(positions * L));
+	muts = g.addNewMutation(m4, 0.0, intPositions);
+	
+	//Add it to the appropriate genomes
+	f = asLogical(asInteger(strsplit(lines[index], "")));
+	for (g in sp2.genomes){
+		g.addMutations(muts[f]);
+   }
+	
+	// remove the dummy subpopulation
+	p103.setSubpopulationSize(0);
+    
+    // READ MS FORMAT INITIAL STATE P30 m6
+	lines = readFile("~/other_projs/chickadee_hybridzone_movement/P30_m6_table_49_nonoverlapping.txt");
+	index = 0;
+	
+   	// skip lines until reaching the // line, then skip that line
+	while (lines[index] != "//")
+		index = index + 1;
+	index = index + 1;
+	
+	if (index + 2 + p1.individualCount > size(lines))
+		stop("File is too short; terminating.");
+	
+	// next line should be segsites:
+	segsitesLine = lines[index];
+	index = index + 1;
+	parts = strsplit(segsitesLine);
+	if (size(parts) != 2) stop("Malformed segsites.");
+	if (parts[0] != "segsites:") stop("Missing segsites.");
+	segsites = asInteger(parts[1]);
+	
+	// and next is positions:
+	positionsLine = lines[index];
+	index = index + 1;
+	parts = strsplit(positionsLine);
+	if (size(parts) != segsites + 1) stop("Malformed positions.");
+	if (parts[0] != "positions:") stop("Missing positions.");
+	positions = asFloat(parts[1:(size(parts)-1)]);
+	
+	// create all mutations in a genome 
+	sim.addSubpop("p104", 2);
+	g = p104.genomes[0];
+	L = sim.chromosome.lastPosition;
+	intPositions = asInteger(round(positions * L));
+	muts = g.addNewMutation(m6, 0.0, intPositions);
+	
+	//Add it to the appropriate genomes
+	f = asLogical(asInteger(strsplit(lines[index], "")));
+	for (g in sp2.genomes){
+		g.addMutations(muts[f]);
+   }
+	// remove the dummy subpopulation
+	p104.setSubpopulationSize(0); 
+}
+1 late() {
+	p1.setSubpopulationSize(2000);
+}
+
+late() { // Set up a grid assess local density
+	inds = p1.individuals;
+	bounds = p1.spatialBounds;
+	// make a density map
+	density = summarizeIndividuals(inds, c(10, 50), bounds,
+	operation="individuals.size();", empty=0.0, perUnitArea=T);
+	density = density / max(density);
+	p1.defineSpatialMap("density", "xy", density, F,
+	range(density), c("black", "black", "black"));
+}
+
+1: late() {
+	//i2.evaluate(p1);
+	//inds = p1.individuals;
+	//competition = i2.totalOfNeighborStrengths(inds);
+	//inds.fitnessScaling = 1.1 - competition / size(inds);	
+}
+2: early() {
+	i1.evaluate(p1);
+}
+mateChoice() {
+	// spatial mate choice
+	return i1.strength(individual);
+}
+modifyChild() {
+	pos = parent1.spatialPosition + rnorm(2, 0, dispersal);
+	pos = p1.pointReflected(pos);
+	
+	if (runif(1) < p1.spatialMapValue("density",pos))
+		return F;
+		
+	child.setSpatialPosition(pos);
+	return T;
+}
+
+2:199 late(){
+	// Set the contact point between the two species
+	contact = 0;// - sim.cycle/rate; // use the sim.cycle to gradual move the contact point
+	// adjust the fitness based on x position and mutation count
+	sp1 = p1.individuals[p1.individuals.x > contact];
+	sp1m2tally = sp1.countOfMutationsOfType(m2);
+	sp1[sp1m2tally == 2].fitnessScaling = 1 - selection;
+	sp1[sp1m2tally == 1].fitnessScaling = 1 - selection*2;
+	sp1[sp1m2tally == 0].fitnessScaling = 1 + selection;
+	//sp1.fitnessScaling = 1 - (sp1m2tally * selectionagainst) + (sp1m1tally * selectionfor);
+	
+	sp2 = p1.individuals[p1.individuals.x < contact];
+	sp2m1tally = sp2.countOfMutationsOfType(m1);
+	sp2[sp2m1tally == 2].fitnessScaling = 1 - selection;
+	sp2[sp2m1tally == 1].fitnessScaling = 1 - selection*2;
+	sp2[sp2m1tally == 0].fitnessScaling = 1 + selection;
+	
+	//sp2m2tally = sp2.sumOfMutationsOfType(m2);
+	//sp2.fitnessScaling = 1 - (sp2m1tally * selectionagainst) + (sp2m2tally * selectionfor);
+}
+200: late() {
+	// Set the contact point between the two species
+	if (rate == 0){
+		contact = 0;
+		}
+	else {
+	contact = 0 + (sim.cycle-200)/rate; // use the sim.cycle to gradual move the contact point
+	}
+	// adjust the fitness based on x position and mutation count
+	sp1 = p1.individuals[p1.individuals.x > contact];
+	sp1m2tally = sp1.countOfMutationsOfType(m2);
+	sp1[sp1m2tally == 2].fitnessScaling = 1 - selection;
+	sp1[sp1m2tally == 1].fitnessScaling = 1 - selection*2;
+	sp1[sp1m2tally == 0].fitnessScaling = 1 + selection;
+	
+	sp2 = p1.individuals[p1.individuals.x < contact];
+	sp2m1tally = sp2.countOfMutationsOfType(m1);
+	sp2[sp2m1tally == 2].fitnessScaling = 1 - selection;
+	sp2[sp2m1tally == 1].fitnessScaling = 1 - selection*2;
+	sp2[sp2m1tally == 0].fitnessScaling = 1 + selection;
+	
+	if (contact >= 15) {
+		subpop1 = sample(p1.individuals[p1.individuals.x > -25 & p1.individuals.x < -22.5], 15);
+	subpop2 = sample(p1.individuals[p1.individuals.x > -22.5 & p1.individuals.x < -20], 15);
+	subpop3 = sample(p1.individuals[p1.individuals.x > -20 & p1.individuals.x < -17.5], 15);
+	subpop4 = sample(p1.individuals[p1.individuals.x > -17.5 & p1.individuals.x < -15], 15);
+	subpop5 = sample(p1.individuals[p1.individuals.x > -15 & p1.individuals.x < -12.5], 15);
+	subpop6 = sample(p1.individuals[p1.individuals.x > -12.5 & p1.individuals.x < -10], 15);
+	subpop7 = sample(p1.individuals[p1.individuals.x > -10 & p1.individuals.x < -7.5], 15);
+	subpop8 = sample(p1.individuals[p1.individuals.x > -7.5 & p1.individuals.x < -5], 15);
+	subpop9 = sample(p1.individuals[p1.individuals.x > -5 & p1.individuals.x < -2.5], 15);
+	subpop10 = sample(p1.individuals[p1.individuals.x > -2.5 & p1.individuals.x < 0], 15);
+	subpop11 = sample(p1.individuals[p1.individuals.x > 0 & p1.individuals.x < 2.5], 15);
+	subpop12 = sample(p1.individuals[p1.individuals.x > 2.5 & p1.individuals.x < 5], 15);
+	subpop13 = sample(p1.individuals[p1.individuals.x > 5 & p1.individuals.x < 7.5], 15);
+	subpop14 = sample(p1.individuals[p1.individuals.x > 7.5 & p1.individuals.x < 10], 15);
+	subpop15 = sample(p1.individuals[p1.individuals.x > 10 & p1.individuals.x < 12.5], 15);
+	subpop16 = sample(p1.individuals[p1.individuals.x > 12.5 & p1.individuals.x < 15], 15);
+	subpop17 = sample(p1.individuals[p1.individuals.x > 15 & p1.individuals.x < 17.5], 15);
+	subpop18 = sample(p1.individuals[p1.individuals.x > 17.5 & p1.individuals.x < 20], 15);
+	subpop19 = sample(p1.individuals[p1.individuals.x > 20 & p1.individuals.x < 22.5], 15);
+	subpop20 = sample(p1.individuals[p1.individuals.x > 22.5 & p1.individuals.x < 25], 15);
+	
+	sampledIndividuals = c(subpop1,subpop2,subpop3,subpop4,subpop5,subpop6,subpop7,subpop8,subpop9,subpop10,subpop11,subpop12,subpop13,subpop14,subpop15,subpop16,subpop17,subpop18,subpop19,subpop20);
+	
+	sampledIndividuals.genomes.outputVCF(VCF, outputMultiallelics=T);
+	
+	sim.simulationFinished();
+	}
+}
+
+
+1500 late() {	// Set up artificial pops to sample from, 15 total across the -25, 25 spatial extent
+	subpop1 = sample(p1.individuals[p1.individuals.x > -25 & p1.individuals.x < -22.5], 15);
+	subpop2 = sample(p1.individuals[p1.individuals.x > -22.5 & p1.individuals.x < -20], 15);
+	subpop3 = sample(p1.individuals[p1.individuals.x > -20 & p1.individuals.x < -17.5], 15);
+	subpop4 = sample(p1.individuals[p1.individuals.x > -17.5 & p1.individuals.x < -15], 15);
+	subpop5 = sample(p1.individuals[p1.individuals.x > -15 & p1.individuals.x < -12.5], 15);
+	subpop6 = sample(p1.individuals[p1.individuals.x > -12.5 & p1.individuals.x < -10], 15);
+	subpop7 = sample(p1.individuals[p1.individuals.x > -10 & p1.individuals.x < -7.5], 15);
+	subpop8 = sample(p1.individuals[p1.individuals.x > -7.5 & p1.individuals.x < -5], 15);
+	subpop9 = sample(p1.individuals[p1.individuals.x > -5 & p1.individuals.x < -2.5], 15);
+	subpop10 = sample(p1.individuals[p1.individuals.x > -2.5 & p1.individuals.x < 0], 15);
+	subpop11 = sample(p1.individuals[p1.individuals.x > 0 & p1.individuals.x < 2.5], 15);
+	subpop12 = sample(p1.individuals[p1.individuals.x > 2.5 & p1.individuals.x < 5], 15);
+	subpop13 = sample(p1.individuals[p1.individuals.x > 5 & p1.individuals.x < 7.5], 15);
+	subpop14 = sample(p1.individuals[p1.individuals.x > 7.5 & p1.individuals.x < 10], 15);
+	subpop15 = sample(p1.individuals[p1.individuals.x > 10 & p1.individuals.x < 12.5], 15);
+	subpop16 = sample(p1.individuals[p1.individuals.x > 12.5 & p1.individuals.x < 15], 15);
+	subpop17 = sample(p1.individuals[p1.individuals.x > 15 & p1.individuals.x < 17.5], 15);
+	subpop18 = sample(p1.individuals[p1.individuals.x > 17.5 & p1.individuals.x < 20], 15);
+	subpop19 = sample(p1.individuals[p1.individuals.x > 20 & p1.individuals.x < 22.5], 15);
+	subpop20 = sample(p1.individuals[p1.individuals.x > 22.5 & p1.individuals.x < 25], 15);
+	
+	sampledIndividuals = c(subpop1,subpop2,subpop3,subpop4,subpop5,subpop6,subpop7,subpop8,subpop9,subpop10,subpop11,subpop12,subpop13,subpop14,subpop15,subpop16,subpop17,subpop18,subpop19,subpop20);
+	
+	sampledIndividuals.genomes.outputVCF(VCF, outputMultiallelics=T);
+
+}
+
