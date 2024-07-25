@@ -35,8 +35,8 @@ initializeRecombinationRate(rates, ends);
 defineConstant("selection", asFloat(format("%1.2f",runif(1,0.01,0.45))));
 defineConstant("rate", asInteger(runif(1,50,250))); // Rate of movement of the contact zone calculated as: contact - (sim.cycle - burnin)/rate
 defineConstant("dispersal", 0.2);
-defineConstant("iteration", 3); // Define the iteration number to include in the vcf output
-defineConstant("output", "~/other_projs/chickadee_hybridzone_movement/TEST"); // base file name to use (could include path or not), 
+//defineConstant("iteration", 3); // Define the iteration number to include in the vcf output
+//defineConstant("output", "~/other_projs/chickadee_hybridzone_movement/TEST"); // base file name to use (could include path or not), 
 defineConstant("VCF", output+"_s"+asString(selection)+"_r"+asString(rate)+"_"+asString(iteration)+".vcf");
 
 // Spatial mate choice
